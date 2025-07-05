@@ -1,10 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const http = require('http');
-
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
-const { HttpServerTransport } = require('@modelcontextprotocol/sdk/server/http.js');
 const z = require('zod');
 
 // === Weather and Population Data ===
@@ -65,34 +62,36 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-server.tool("weather", z.object({ city: z.string() }), async ({ city }) => ({
-  content: [{ type: "text", text: await getWeather(city) }],
-}));
+// Register tools
+server.tool(
+  "weather",
+  z.object({ city: z.string() }),
+  async ({ city }) => ({
+    content: [{ type: "text", text: await getWeather(city) }],
+  })
+);
 
-server.tool("population", z.object({ city: z.string() }), async ({ city }) => ({
-  content: [{ type: "text", text: await getPopulation(city) }],
-}));
+server.tool(
+  "population",
+  z.object({ city: z.string() }),
+  async ({ city }) => ({
+    content: [{ type: "text", text: await getPopulation(city) }],
+  })
+);
 
-// === Express App and HTTP Transport ===
+// === Express Server with SSE Endpoint Only ===
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const httpTransport = new HttpServerTransport();
-server.listen(httpTransport);
-
-app.use("/mcp", httpTransport.handler); // 👈 enables POST /mcp/call
-
-app.get("/sse", (req, res) => {
-  console.log("🔌 Incoming SSE connection");
+// SSE Endpoint
+app.post("/sse", (req, res) => {
   const transport = new SSEServerTransport('/mcp', res);
   server.connect(transport);
 });
 
 const PORT = process.env.PORT || 7070;
-const httpServer = http.createServer(app);
-httpServer.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
-  console.log(`🌐 HTTP: POST http://localhost:${PORT}/mcp/call`);
-  console.log(`🔗 SSE: GET  http://localhost:${PORT}/sse`);
+app.listen(PORT, () => {
+  console.log(`✅ WeatherMCP running at http://localhost:${PORT}`);
+  console.log(`🔗 SSE endpoint: http://localhost:${PORT}/sse`);
 });
